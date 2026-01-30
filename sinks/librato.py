@@ -5,10 +5,10 @@ import ast
 import sys
 import socket
 import logging
-import ConfigParser
+from six.moves import configparser
 import re
 import base64
-import urllib2
+from six.moves import urllib_request
 import json
 import os
 
@@ -69,7 +69,7 @@ class LibratoStore(object):
         self.flush_timeout_secs = 5
         self.gauges = {}
         self.measurements = {}
-        
+
         # Limit our payload sizes
         self.max_metrics_payload = 500
 
@@ -96,7 +96,7 @@ class LibratoStore(object):
 
         sect = "librato"
 
-        config = ConfigParser.RawConfigParser()
+        config = configparser.RawConfigParser()
         config.read(conffile)
 
         if not config.has_section(sect):
@@ -119,7 +119,7 @@ class LibratoStore(object):
             self.source = config.get(sect, 'source')
         else:
             self.source = None
-        
+
         if config.has_option(sect, 'host'):
             self.host = config.get(sect, 'host')
         else:
@@ -155,13 +155,13 @@ class LibratoStore(object):
             self.extended_counters = config.getboolean(sect, "extended_counters")
         else:
             self.extended_counters = False
-        
+
         # Check if we want to also send measurements to legacy Librato API
         if config.has_option(sect, "write_to_legacy"):
             self.write_to_legacy = config.getboolean(sect, "write_to_legacy")
         else:
             self.write_to_legacy = False
-        
+
         # Global Tags
         if config.has_option(sect, "tags"):
             self.tags = ast.literal_eval(config.get(sect, "tags"))
@@ -181,13 +181,13 @@ class LibratoStore(object):
 
     def sanitize(self, name):
         return self.sanitize_re.sub("_", name)
-    
+
     def parse_tags(self, name, multipart=False):
         # Find and parse the tags from the name using the syntax name#tag1=value,tag2=value
         s = name.split("#")
         tags = {}
         raw_tags = []
-        
+
         if len(s) > 1:
             name = s.pop(0)
             raw_tags = s.pop().split(",")
@@ -215,8 +215,8 @@ class LibratoStore(object):
                 tag_key, tag_value = raw_tag.split("=")
                 tags[tag_key] = tag_value
         return name, tags
-                
-        
+
+
 
     def add_measure(self, key, value, time):
         ts = int(time)
@@ -256,14 +256,14 @@ class LibratoStore(object):
         # Bail if skipping
         if name == None:
             return
-            
+
         # Add a metric prefix
         if self.prefix:
             name = "%s.%s" % (self.prefix, name)
 
         name = self.sanitize(name)
-        
-        # Add the hostname as a global tag. 
+
+        # Add the hostname as a global tag.
         self.tags['host'] = self.host
 
         if source:
@@ -340,7 +340,7 @@ class LibratoStore(object):
         """
         POST a payload to Librato.
         """
-        
+
         if legacy:
             body = json.dumps({ 'gauges' : m })
             url = "%s/v1/metrics" % (self.api)
@@ -348,11 +348,11 @@ class LibratoStore(object):
             global_tags = self.tags
             body = json.dumps({ 'measurements' : m, 'tags': global_tags })
             url = "%s/v1/measurements" % (self.api)
-                
-        req = urllib2.Request(url, body, headers)
+
+        req = urllib_request.Request(url, body, headers)
 
         try:
-            f = urllib2.urlopen(req, timeout = self.flush_timeout_secs)
+            f = urllib_request.urlopen(req, timeout = self.flush_timeout_secs)
             response = f.read()
             f.close()
             # The new tags API supports partial payload accept/reject
@@ -362,7 +362,7 @@ class LibratoStore(object):
                 # errors could be [], so check that prior to logging anything
                 if parsed_response['errors']:
                     self.logger.error(parsed_response)
-        except urllib2.HTTPError as error:
+        except urllib_request.HTTPError as error:
             body = error.read()
             self.logger.warning('Failed to send metrics to Librato: Code: %d. Response: %s' % \
                                 (error.code, body))
@@ -382,7 +382,7 @@ class LibratoStore(object):
         # Nothing to do
         if len(self.measurements) == 0:
             return
-    
+
         headers = {
             'Content-Type': 'application/json',
             'User-Agent': self.build_user_agent(),
@@ -392,7 +392,7 @@ class LibratoStore(object):
         tagged_metrics = []
         legacy_metrics = []
         count = 0
-        
+
         for v in self.measurements.values():
             for metric in v:
                 tagged_metrics.append(metric)
@@ -405,7 +405,7 @@ class LibratoStore(object):
 
         if count > 0:
             self.flush_payload(headers, tagged_metrics)
-        
+
         # If enabled, submit flush metrics to Librato's legacy API
         if self.write_to_legacy:
             if len(self.gauges) == 0:
@@ -423,7 +423,7 @@ class LibratoStore(object):
 
             if count > 0:
                 self.flush_payload(headers, legacy_metrics, True)
-        
+
 
     def build_basic_auth(self):
         base64string = base64.encodestring('%s:%s' % (self.email, self.token))
@@ -450,7 +450,7 @@ if __name__ == "__main__":
 
     # Get all the inputs
     metrics = sys.stdin.read()
-    
+
     # Flush
     librato.build(metrics.splitlines())
     librato.flush()

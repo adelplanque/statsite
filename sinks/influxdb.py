@@ -65,8 +65,8 @@ class InfluxDBStore(object):
         """
         Loads configuration from an INI format file.
         """
-        import ConfigParser
-        ini = ConfigParser.RawConfigParser()
+        from six.moves import configparser
+        ini = configparser.RawConfigParser()
         ini.read(cfg)
 
         sect = "influxdb"
