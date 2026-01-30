@@ -11,11 +11,15 @@ import random
 try:
     import pytest
 except ImportError:
-    print >> sys.stderr, "Integ tests require pytests!"
+    sys.stderr.write("Integ tests require pytests!\n")
     sys.exit(1)
 
 
-def pytest_funcarg__servers(request):
+STATSITE = os.environ.get("STATSITE", "./statsite")
+
+
+@pytest.fixture
+def servers(request):
     "Returns a new APIHandler with a filter manager"
     # Create tmpdir and delete after
     tmpdir = tempfile.mkdtemp()
@@ -38,7 +42,7 @@ timers_include = MEAN,STDEV,SUM,SUM_SQ,LOWER,UPPER,SAMPLE_RATE
     open(config_path, "w").write(conf)
 
     # Start the process
-    proc = subprocess.Popen(['./statsite', '-f', config_path])
+    proc = subprocess.Popen([STATSITE, '-f', config_path])
     proc.poll()
     assert proc.returncode is None
 
@@ -48,22 +52,22 @@ timers_include = MEAN,STDEV,SUM,SUM_SQ,LOWER,UPPER,SAMPLE_RATE
             proc.kill()
             proc.wait()
             shutil.rmtree(tmpdir)
-        except:
-            print proc
+        except Exception:
+            print(proc)
             pass
     request.addfinalizer(cleanup)
 
     # Make a connection to the server
     connected = False
-    for x in xrange(3):
+    for x in range(3):
         try:
             conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             conn.settimeout(1)
             conn.connect(("localhost", port))
             connected = True
             break
-        except Exception, e:
-            print e
+        except Exception as e:
+            print(e)
             time.sleep(0.5)
 
     # Die now
@@ -93,9 +97,9 @@ class TestInteg(object):
     def test_counters(self, servers):
         "Tests adding kv pairs"
         server, _, output = servers
-        server.sendall("foobar:100|ms\n")
-        server.sendall("foobar:200|ms\n")
-        server.sendall("foobar:300|ms\n")
+        server.sendall(b"foobar:100|ms\n")
+        server.sendall(b"foobar:200|ms\n")
+        server.sendall(b"foobar:300|ms\n")
 
         wait_file(output)
         out = open(output).read()
@@ -110,5 +114,3 @@ class TestInteg(object):
         assert "timers.foobar.median" not in out
         assert "timers.foobar.p50|200" in out
         assert "timers.foobar.sample_rate|3" in out
-
-

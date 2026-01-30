@@ -16,16 +16,18 @@ import struct
 try:
     import pytest
 except ImportError:
-    print >> sys.stderr, "Integ tests require pytests!"
+    sys.stderr.write("Integ tests require pytests!\n")
     sys.exit(1)
 
 
 BINARY_HEADER = struct.Struct("<BBHd")
 BINARY_SET_HEADER = struct.Struct("<BBHH")
 BIN_TYPES = {"kv": 1, "c": 2, "ms": 3, "set": 4, "g": 5, "delta": 6}
+STATSITE = os.environ.get("STATSITE", "./statsite")
 
 
-def pytest_funcarg__servers(request):
+@pytest.fixture
+def servers(request):
     "Returns a new APIHandler with a filter manager"
     # Create tmpdir and delete after
     tmpdir = tempfile.mkdtemp()
@@ -46,7 +48,7 @@ stream_cmd = %s
     open(config_path, "w").write(conf)
 
     # Start the process
-    proc = subprocess.Popen(['./statsite', '-f', config_path])
+    proc = subprocess.Popen([STATSITE, '-f', config_path])
     proc.poll()
     assert proc.returncode is None
 
@@ -56,22 +58,22 @@ stream_cmd = %s
             proc.kill()
             proc.wait()
             shutil.rmtree(tmpdir)
-        except:
-            print proc
+        except Exception:
+            print(proc)
             pass
     request.addfinalizer(cleanup)
 
     # Make a connection to the server
     connected = False
-    for x in xrange(3):
+    for x in range(3):
         try:
             conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             conn.settimeout(1)
             conn.connect(("localhost", port))
             connected = True
             break
-        except Exception, e:
-            print e
+        except Exception as e:
+            print(e)
             time.sleep(0.5)
 
     # Die now
@@ -88,22 +90,23 @@ stream_cmd = %s
 
 def format(key, type, val):
     "Formats a binary message for statsite"
-    key = str(key)
+    key = key.encode("utf-8")
     key_len = len(key) + 1
     type_num = BIN_TYPES[type]
     header = BINARY_HEADER.pack(170, type_num, key_len, float(val))
-    mesg = header + key + "\0"
+    mesg = header + key + b"\0"
     return mesg
+
 
 def format_set(key, val):
     "Formats a binary set message for statsite"
-    key = str(key)
+    key = key.encode("utf-8")
     key_len = len(key) + 1
-    val = str(val)
+    val = val.encode("utf-8")
     val_len = len(val) + 1
     type_num = BIN_TYPES["set"]
     header = BINARY_SET_HEADER.pack(170, type_num, key_len, val_len)
-    mesg = "".join([header, key, "\0", val, "\0"])
+    mesg = b"".join([header, key, b"\0", val, b"\0"])
     return mesg
 
 
@@ -173,13 +176,13 @@ class TestInteg(object):
     def test_meters(self, servers):
         "Tests adding kv pairs"
         server, _, output = servers
-        msg = ""
-        for x in xrange(100):
+        msg = b""
+        for x in range(100):
             msg += format("noobs", "ms", x)
         server.sendall(msg)
         wait_file(output)
         out = open(output).read()
-        print out
+        print(out)
         assert "timers.noobs.sum|4950" in out
         assert "timers.noobs.sum_sq|328350" in out
         assert "timers.noobs.mean|49.500000" in out
@@ -257,13 +260,13 @@ class TestIntegUDP(object):
     def test_meters(self, servers):
         "Tests adding kv pairs"
         _, server, output = servers
-        msg = ""
-        for x in xrange(100):
+        msg = b""
+        for x in range(100):
             msg += format("noobs", "ms", x)
         server.sendall(msg)
         wait_file(output)
         out = open(output).read()
-        print out
+        print(out)
         assert "timers.noobs.sum|4950" in out
         assert "timers.noobs.sum_sq|328350" in out
         assert "timers.noobs.mean|49.500000" in out

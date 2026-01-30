@@ -2,7 +2,7 @@
 Testing the http sink
 """
 import json
-from mock import patch
+from unittest.mock import patch
 
 from sinks.http import StatsiteHttp
 

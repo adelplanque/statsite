@@ -9,7 +9,7 @@ import tempfile
 try:
     import pytest
 except ImportError:
-    print >> sys.stderr, "Integ tests require pytests!"
+    sys.stderr.write("Integ tests require pytests!\n")
     sys.exit(1)
 
 
@@ -33,7 +33,7 @@ timers.request#tag1=value1,tag2=value2.p90|16.000000|1401577507\
     options.setdefault("write_to_legacy", False)
 
     f = tempfile.NamedTemporaryFile(delete=False)
-    f.write(build_librato_config(options))
+    f.write(build_librato_config(options).encode("utf-8"))
     f.close()
     librato = sinks.librato.LibratoStore(f.name)
     os.unlink(f.name)
@@ -57,7 +57,7 @@ token = 02ac4003c4fcd11bf9cee34e34263155dc7ba1906c322d167db6ab4b2cd2082b\
 
     if "host" in options:
         config += "\nhost = %s" % (options["host"])
-    
+
     if "write_to_legacy" in options:
         config += "\nwrite_to_legacy = %s" % (options["write_to_legacy"])
     else:
@@ -85,7 +85,7 @@ class TestLibratoLegacy(object):
             "min":          1017.0,
             "stddev_m2":     0.0
         }
-        
+
         assert expected_output == self.librato.gauges["query\tlocalhost"]
 
     def test_counts_send_as_gauges(self):
@@ -232,14 +232,14 @@ class TestLibrato(object):
         }]
 
         # No top level sources allowed here...
-        assert False == self.librato.measurements.has_key("source")
-        assert False == self.librato.tags.has_key("source")
+        assert "source" not in self.librato.measurements
+        assert "source" not in self.librato.tags
         assert expected_output == self.librato.measurements["requests.2xx"]
 
     def test_host_tag_autopopulated(self):
         # 'host' is automatically defaulted to `hostname` unless specified in the config
         self.librato = build_librato()
-        assert self.librato.tags.has_key("host")
+        assert "host" in self.librato.tags
 
     def test_source_from_config(self):
         # 'source' is defaulted to the config value
@@ -279,7 +279,7 @@ class TestLibrato(object):
         })
         m = self.librato.measurements["requests.2xx\tmyhost"][0]
         assert m['tags']['source'] == 'uid_123'
-    
+
     def test_measurements_with_tags_and_source(self):
         self.librato = build_librato({
             "statsite_output": "counts.requests.2xx#environment=stg|42|1401577507",
@@ -291,13 +291,12 @@ class TestLibrato(object):
             "value": 42,
             "tags": { "source": "myhost", "environment": "stg" }
         }]
-        
-        # This should still default to `hostname`
-        assert self.librato.tags.has_key("host")
-        # Top level source not allowed here
-        assert False == self.librato.measurements.has_key("source")
-        assert expected_output == self.librato.measurements["requests.2xx\tmyhost"]
 
+        # This should still default to `hostname`
+        assert "host" in self.librato.tags
+        # Top level source not allowed here
+        assert "source" not in self.librato.measurements
+        assert expected_output == self.librato.measurements["requests.2xx\tmyhost"]
 
     def test_metric_with_multiple_tagsets(self):
         data = """\
@@ -437,7 +436,7 @@ timers.foo.count|2|1401577507
         }]
 
         assert expected_output == self.librato.measurements["request"]
-        
+
     def test_measurements_with_period_in_tag_value_and_suffix(self):
         self.librato = build_librato({
             "statsite_output": "timers.tags_many_dots#tag1=value1,tag2=value.dotted.p90|16.000000|1401577507"
@@ -450,7 +449,7 @@ timers.foo.count|2|1401577507
         }]
 
         assert expected_output == self.librato.measurements["tags_many_dots.p90"]
-    
+
     def test_dual_write(self):
         self.librato = build_librato({
             "statsite_output": "counts.active_sessions|1.000000|1401577507",
@@ -496,6 +495,6 @@ timers.foo.count|2|1401577507
             "value":        16.0,
             "tags":         { "environment": "stg" }
         }]
-        
+
         assert {"host": "myhost" } == self.librato.tags
         assert expected_output == self.librato.measurements["requests.2xx"]

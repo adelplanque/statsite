@@ -17,7 +17,7 @@ import struct
 try:
     import pytest
 except ImportError:
-    print >> sys.stderr, "Integ tests require pytests!"
+    sys.stderr.write("Integ tests require pytests!\n")
     sys.exit(1)
 
 
@@ -25,6 +25,7 @@ BINARY_HEADER = struct.Struct("<BBHd")
 BINARY_SET_HEADER = struct.Struct("<BBHH")
 COUNT_VAL = struct.Struct("<I")
 BIN_TYPES = {"kv": 1, "c": 2, "ms": 3, "set": 4, "g": 5}
+STATSITE = os.environ.get("STATSITE", "./statsite")
 
 BINARY_OUT_HEADER = struct.Struct("<QBBHd")
 BINARY_OUT_LEN = 20
@@ -47,11 +48,12 @@ VAL_TYPE_MAP = {
 }
 
 # Pre-compute all the possible percentiles
-for x in xrange(1, 100):
+for x in range(1, 100):
     VAL_TYPE_MAP["P%02d" % x] = 128 | x
 
 
-def pytest_funcarg__servers(request):
+@pytest.fixture
+def servers(request):
     "Returns a new APIHandler with a filter manager"
     # Create tmpdir and delete after
     tmpdir = tempfile.mkdtemp()
@@ -80,7 +82,7 @@ width=10
     open(config_path, "w").write(conf)
 
     # Start the process
-    proc = subprocess.Popen(['./statsite', '-f', config_path])
+    proc = subprocess.Popen([STATSITE, '-f', config_path])
     proc.poll()
     assert proc.returncode is None
 
@@ -90,22 +92,22 @@ width=10
             proc.kill()
             proc.wait()
             shutil.rmtree(tmpdir)
-        except:
-            print proc
+        except Exception:
+            print(proc)
             pass
     request.addfinalizer(cleanup)
 
     # Make a connection to the server
     connected = False
-    for x in xrange(3):
+    for x in range(3):
         try:
             conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             conn.settimeout(1)
             conn.connect(("localhost", port))
             connected = True
             break
-        except Exception, e:
-            print e
+        except Exception as e:
+            print(e)
             time.sleep(0.5)
 
     # Die now
@@ -120,7 +122,8 @@ width=10
     return conn, conn2, output
 
 
-def pytest_funcarg__serversPrefix(request):
+@pytest.fixture
+def serversPrefix(request):
     "Returns a new APIHandler with a filter manager"
     # Create tmpdir and delete after
     tmpdir = tempfile.mkdtemp()
@@ -150,7 +153,7 @@ width=10
     open(config_path, "w").write(conf)
 
     # Start the process
-    proc = subprocess.Popen(['./statsite', '-f', config_path])
+    proc = subprocess.Popen([STATSITE, '-f', config_path])
     proc.poll()
     assert proc.returncode is None
 
@@ -160,22 +163,22 @@ width=10
             proc.kill()
             proc.wait()
             shutil.rmtree(tmpdir)
-        except:
-            print proc
+        except Exception:
+            print(proc)
             pass
     request.addfinalizer(cleanup)
 
     # Make a connection to the server
     connected = False
-    for x in xrange(3):
+    for x in range(3):
         try:
             conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             conn.settimeout(1)
             conn.connect(("localhost", port))
             connected = True
             break
-        except Exception, e:
-            print e
+        except Exception as e:
+            print(e)
             time.sleep(0.5)
 
     # Die now
@@ -192,30 +195,30 @@ width=10
 
 def format(key, type, val):
     "Formats a binary message for statsite"
-    key = str(key)
+    key = key.encode("utf-8")
     key_len = len(key) + 1
     type_num = BIN_TYPES[type]
     header = BINARY_HEADER.pack(170, type_num, key_len, float(val))
-    mesg = header + key + "\0"
+    mesg = header + key + b"\0"
     return mesg
 
 
 def format_set(key, val):
     "Formats a binary set message for statsite"
-    key = str(key)
+    key = key.encode("utf-8")
     key_len = len(key) + 1
-    val = str(val)
+    val = val.encode("utf-8")
     val_len = len(val) + 1
     type_num = BIN_TYPES["set"]
     header = BINARY_SET_HEADER.pack(170, type_num, key_len, val_len)
-    mesg = "".join([header, key, "\0", val, "\0"])
+    mesg = b"".join([header, key, b"\0", val, b"\0"])
     return mesg
 
 
 def format_output(time, key, type, val_type, val):
     "Formats an response line. This is to check that we meet spec"
     prefix = BINARY_OUT_HEADER.pack(int(time), type, val_type, len(key) + 1, val)
-    return prefix + key + "\0"
+    return prefix + key.encode("utf-8") + b"\0"
 
 def format_output_count(time, key, type, val_type, val, count):
     "Formats a response line that includes a count, for histograms"
@@ -240,7 +243,7 @@ class TestInteg(object):
         server.sendall(format("tubez", "kv", 100))
         wait_file(output)
         now = time.time()
-        out = open(output).read()
+        out = open(output, "rb").read()
         assert out in (format_output(now, "tubez", BIN_TYPES["kv"], VAL_TYPE_MAP["kv"], 100),
                        format_output(now - 1, "tubez", BIN_TYPES["kv"], VAL_TYPE_MAP["kv"], 100))
 
@@ -250,7 +253,7 @@ class TestInteg(object):
         server.sendall(format("g1", "g", 500))
         wait_file(output)
         now = time.time()
-        out = open(output).read()
+        out = open(output, "rb").read()
         assert out in (format_output(now, "g1", BIN_TYPES["g"], VAL_TYPE_MAP["kv"], 500),
                        format_output(now - 1, "g1", BIN_TYPES["g"], VAL_TYPE_MAP["kv"], 500))
 
@@ -262,7 +265,7 @@ class TestInteg(object):
         server.sendall(format("foobar", "c", 300))
         wait_file(output)
         now = time.time()
-        out = open(output).read()
+        out = open(output, "rb").read()
 
         # Adjust for time drift
         if format_output(now - 1, "foobar", BIN_TYPES["c"], VAL_TYPE_MAP["count"], 600) in out:
@@ -274,13 +277,13 @@ class TestInteg(object):
     def test_meters(self, servers):
         "Tests adding kv pairs"
         server, _, output = servers
-        msg = ""
-        for x in xrange(100):
+        msg = b""
+        for x in range(100):
             msg += format("noobs", "ms", x)
         server.sendall(msg)
         wait_file(output)
         now = time.time()
-        out = open(output).read()
+        out = open(output, "rb").read()
 
         # Adjust for time drift
         if format_output(now - 1, "noobs", BIN_TYPES["ms"], VAL_TYPE_MAP["sum"], 4950) in out:
@@ -302,13 +305,13 @@ class TestInteg(object):
     def test_histogram(self, servers):
         "Tests streaming of histogram values"
         server, _, output = servers
-        msg = ""
-        for x in xrange(100):
+        msg = b""
+        for x in range(100):
             msg += format("has_hist.test", "ms", x)
         server.sendall(msg)
         wait_file(output)
         now = time.time()
-        out = open(output).read()
+        out = open(output, "rb").read()
 
         # Adjust for time drift
         if format_output_count(now - 1, "has_hist.test", BIN_TYPES["ms"], VAL_TYPE_MAP["hist_min"], 10, 10) in out:
@@ -333,7 +336,7 @@ class TestInteg(object):
         server.sendall(format_set("zip", "baz"))
         wait_file(output)
         now = time.time()
-        out = open(output).read()
+        out = open(output, "rb").read()
 
         # Adjust for time drift
         if format_output(now - 1, "zip", BIN_TYPES["set"], VAL_TYPE_MAP["sum"], 3) in out:
@@ -348,7 +351,7 @@ class TestIntegPrefix(object):
         server.sendall(format("tubez", "kv", 100))
         wait_file(output)
         now = time.time()
-        out = open(output).read()
+        out = open(output, "rb").read()
         assert out in (format_output(now, "kv.tubez", BIN_TYPES["kv"], VAL_TYPE_MAP["kv"], 100),
                        format_output(now - 1, "kv.tubez", BIN_TYPES["kv"], VAL_TYPE_MAP["kv"], 100))
 
@@ -358,7 +361,7 @@ class TestIntegPrefix(object):
         server.sendall(format("g1", "g", 500))
         wait_file(output)
         now = time.time()
-        out = open(output).read()
+        out = open(output, "rb").read()
         assert out in (format_output(now, "gauges.g1", BIN_TYPES["g"], VAL_TYPE_MAP["kv"], 500),
                        format_output(now - 1, "gauges.g1", BIN_TYPES["g"], VAL_TYPE_MAP["kv"], 500))
 
@@ -370,7 +373,7 @@ class TestIntegPrefix(object):
         server.sendall(format("foobar", "c", 300))
         wait_file(output)
         now = time.time()
-        out = open(output).read()
+        out = open(output, "rb").read()
 
         # Adjust for time drift
         if format_output(now - 1, "counts.foobar", BIN_TYPES["c"], VAL_TYPE_MAP["count"], 3) in out:
@@ -382,13 +385,13 @@ class TestIntegPrefix(object):
     def test_meters(self, serversPrefix):
         "Tests adding kv pairs"
         server, _, output = serversPrefix
-        msg = ""
-        for x in xrange(100):
+        msg = b""
+        for x in range(100):
             msg += format("noobs", "ms", x)
         server.sendall(msg)
         wait_file(output)
         now = time.time()
-        out = open(output).read()
+        out = open(output, "rb").read()
 
         # Adjust for time drift
         if format_output(now - 1, "timers.noobs", BIN_TYPES["ms"], VAL_TYPE_MAP["sum"], 4950) in out:
@@ -410,13 +413,13 @@ class TestIntegPrefix(object):
     def test_histogram(self, serversPrefix):
         "Tests streaming of histogram values"
         server, _, output = serversPrefix
-        msg = ""
-        for x in xrange(100):
+        msg = b""
+        for x in range(100):
             msg += format("has_hist.test", "ms", x)
         server.sendall(msg)
         wait_file(output)
         now = time.time()
-        out = open(output).read()
+        out = open(output, "rb").read()
 
         # Adjust for time drift
         if format_output(now - 1, "timers.noobs", BIN_TYPES["ms"], VAL_TYPE_MAP["sum"], 4950) in out:
@@ -441,7 +444,7 @@ class TestIntegPrefix(object):
         server.sendall(format_set("zip", "baz"))
         wait_file(output)
         now = time.time()
-        out = open(output).read()
+        out = open(output, "rb").read()
 
         # Adjust for time drift
         if format_output(now - 1, "sets.zip", BIN_TYPES["set"], VAL_TYPE_MAP["sum"], 3) in out:

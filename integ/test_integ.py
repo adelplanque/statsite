@@ -13,11 +13,15 @@ import random
 try:
     import pytest
 except ImportError:
-    print >> sys.stderr, "Integ tests require pytests!"
+    sys.stderr.write("Integ tests require pytests!\n")
     sys.exit(1)
 
 
-def pytest_funcarg__servers(request):
+STATSITE = os.environ.get("STATSITE", "./statsite")
+
+
+@pytest.fixture
+def servers(request):
     "Returns a new APIHandler with a filter manager"
     # Create tmpdir and delete after
     tmpdir = tempfile.mkdtemp()
@@ -46,7 +50,7 @@ width=10
     open(config_path, "w").write(conf)
 
     # Start the process
-    proc = subprocess.Popen(['./statsite', '-f', config_path])
+    proc = subprocess.Popen([STATSITE, '-f', config_path])
     proc.poll()
     assert proc.returncode is None
 
@@ -56,22 +60,22 @@ width=10
             proc.kill()
             proc.wait()
             shutil.rmtree(tmpdir)
-        except:
-            print proc
+        except Exception:
+            print(proc)
             pass
     request.addfinalizer(cleanup)
 
     # Make a connection to the server
     connected = False
-    for x in xrange(3):
+    for x in range(3):
         try:
             conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             conn.settimeout(1)
             conn.connect(("localhost", port))
             connected = True
             break
-        except Exception, e:
-            print e
+        except Exception as e:
+            print(e)
             time.sleep(0.5)
 
     # Die now
@@ -101,7 +105,7 @@ class TestInteg(object):
     def test_kv(self, servers):
         "Tests adding kv pairs"
         server, _, output = servers
-        server.sendall("tubez:100|kv\n")
+        server.sendall(b"tubez:100|kv\n")
 
         wait_file(output)
         now = time.time()
@@ -111,8 +115,8 @@ class TestInteg(object):
     def test_gauges(self, servers):
         "Tests adding gauges"
         server, _, output = servers
-        server.sendall("g1:1|g\n")
-        server.sendall("g1:50|g\n")
+        server.sendall(b"g1:1|g\n")
+        server.sendall(b"g1:50|g\n")
         wait_file(output)
         now = time.time()
         out = open(output).read()
@@ -121,8 +125,8 @@ class TestInteg(object):
     def test_gauges_delta(self, servers):
         "Tests adding gauges"
         server, _, output = servers
-        server.sendall("gd:+50|g\n")
-        server.sendall("gd:+50|g\n")
+        server.sendall(b"gd:+50|g\n")
+        server.sendall(b"gd:+50|g\n")
         wait_file(output)
         now = time.time()
         out = open(output).read()
@@ -131,8 +135,8 @@ class TestInteg(object):
     def test_gauges_delta_neg(self, servers):
         "Tests adding gauges"
         server, _, output = servers
-        server.sendall("gd:-50|g\n")
-        server.sendall("gd:-50|g\n")
+        server.sendall(b"gd:-50|g\n")
+        server.sendall(b"gd:-50|g\n")
         wait_file(output)
         now = time.time()
         out = open(output).read()
@@ -141,9 +145,9 @@ class TestInteg(object):
     def test_counters(self, servers):
         "Tests adding kv pairs"
         server, _, output = servers
-        server.sendall("foobar:100|c\n")
-        server.sendall("foobar:200|c\n")
-        server.sendall("foobar:300|c\n")
+        server.sendall(b"foobar:100|c\n")
+        server.sendall(b"foobar:200|c\n")
+        server.sendall(b"foobar:300|c\n")
 
         wait_file(output)
         now = time.time()
@@ -154,9 +158,9 @@ class TestInteg(object):
     def test_counters_sample(self, servers):
         "Tests adding kv pairs"
         server, _, output = servers
-        server.sendall("foobar:100|c|@0.1\n")
-        server.sendall("foobar:200|c|@0.1\n")
-        server.sendall("foobar:300|c|@0.1\n")
+        server.sendall(b"foobar:100|c|@0.1\n")
+        server.sendall(b"foobar:200|c|@0.1\n")
+        server.sendall(b"foobar:300|c|@0.1\n")
 
         wait_file(output)
         now = time.time()
@@ -167,9 +171,9 @@ class TestInteg(object):
     def test_meters_alias(self, servers):
         "Tests adding timing data with the 'h' alias"
         server, _, output = servers
-        msg = ""
-        for x in xrange(100):
-            msg += "val:%d|h\n" % x
+        msg = b""
+        for x in range(100):
+            msg += b"val:%d|h\n" % x
         server.sendall(msg)
 
         wait_file(output)
@@ -191,9 +195,9 @@ class TestInteg(object):
     def test_meters(self, servers):
         "Tests adding kv pairs"
         server, _, output = servers
-        msg = ""
-        for x in xrange(100):
-            msg += "noobs:%d|ms\n" % x
+        msg = b""
+        for x in range(100):
+            msg += b"noobs:%d|ms\n" % x
         server.sendall(msg)
 
         wait_file(output)
@@ -215,9 +219,9 @@ class TestInteg(object):
     def test_timers_with_rate(self, servers):
         "Tests timers with sampling rate"
         server, _, output = servers
-        msg = ""
-        for x in xrange(100):
-            msg += "withrate:%d|ms|@0.5\n" % x
+        msg = b""
+        for x in range(100):
+            msg += b"withrate:%d|ms|@0.5\n" % x
         server.sendall(msg)
 
         wait_file(output)
@@ -239,9 +243,9 @@ class TestInteg(object):
     def test_histogram(self, servers):
         "Tests adding keys with histograms"
         server, _, output = servers
-        msg = ""
-        for x in xrange(100):
-            msg += "has_hist.test:%d|ms\n" % x
+        msg = b""
+        for x in range(100):
+            msg += b"has_hist.test:%d|ms\n" % x
         server.sendall(msg)
 
         wait_file(output)
@@ -260,9 +264,9 @@ class TestInteg(object):
     def test_sets(self, servers):
         "Tests adding kv pairs"
         server, _, output = servers
-        server.sendall("zip:foo|s\n")
-        server.sendall("zip:bar|s\n")
-        server.sendall("zip:baz|s\n")
+        server.sendall(b"zip:foo|s\n")
+        server.sendall(b"zip:bar|s\n")
+        server.sendall(b"zip:baz|s\n")
 
         wait_file(output)
         now = time.time()
@@ -272,14 +276,14 @@ class TestInteg(object):
     def test_double_parsing(self, servers):
         "Tests string to double parsing"
         server, _, output = servers
-        server.sendall("int1:1|c\n")
-        server.sendall("decimal1:1.0|c\n")
-        server.sendall("decimal2:2.3456789|c\n")
-        server.sendall("scientific1:1.0e5|c\n")
-        server.sendall("scientific2:2.0e05|c\n")
-        server.sendall("scientific3:3.0E05|c\n")
-        server.sendall("scientific4:4.0e-5|c\n")
-        server.sendall("underflow1:1.964393875E-314|c\n")
+        server.sendall(b"int1:1|c\n")
+        server.sendall(b"decimal1:1.0|c\n")
+        server.sendall(b"decimal2:2.3456789|c\n")
+        server.sendall(b"scientific1:1.0e5|c\n")
+        server.sendall(b"scientific2:2.0e05|c\n")
+        server.sendall(b"scientific3:3.0E05|c\n")
+        server.sendall(b"scientific4:4.0e-5|c\n")
+        server.sendall(b"underflow1:1.964393875E-314|c\n")
 
         wait_file(output)
         out = open(output).read()
@@ -295,7 +299,7 @@ class TestInteg(object):
 #    def test_condensed(self, servers):
 #        "Tests adding condensed stats"
 #        _, server, output = servers
-#        server.sendall("foo:4|c:5|ms:3|ms:7|g\n")
+#        server.sendall(b"foo:4|c:5|ms:3|ms:7|g\n")
 #
 #        wait_file(output)
 #        now = time.time()
@@ -309,7 +313,7 @@ class TestIntegUDP(object):
     def test_kv(self, servers):
         "Tests adding kv pairs"
         _, server, output = servers
-        server.sendall("tubez:100|kv\n")
+        server.sendall(b"tubez:100|kv\n")
         wait_file(output)
         now = time.time()
         out = open(output).read()
@@ -318,8 +322,8 @@ class TestIntegUDP(object):
     def test_gauges(self, servers):
         "Tests adding gauges"
         _, server, output = servers
-        server.sendall("g1:1|g\n")
-        server.sendall("g1:50|g\n")
+        server.sendall(b"g1:1|g\n")
+        server.sendall(b"g1:50|g\n")
         wait_file(output)
         now = time.time()
         out = open(output).read()
@@ -328,8 +332,8 @@ class TestIntegUDP(object):
     def test_gauges_delta(self, servers):
         "Tests adding gauges"
         _, server, output = servers
-        server.sendall("gd:+50|g\n")
-        server.sendall("gd:+50|g\n")
+        server.sendall(b"gd:+50|g\n")
+        server.sendall(b"gd:+50|g\n")
         wait_file(output)
         now = time.time()
         out = open(output).read()
@@ -338,8 +342,8 @@ class TestIntegUDP(object):
     def test_gauges_delta_neg(self, servers):
         "Tests adding gauges"
         _, server, output = servers
-        server.sendall("gd:-50|g\n")
-        server.sendall("gd:-50|g\n")
+        server.sendall(b"gd:-50|g\n")
+        server.sendall(b"gd:-50|g\n")
         wait_file(output)
         now = time.time()
         out = open(output).read()
@@ -348,8 +352,8 @@ class TestIntegUDP(object):
     def test_bad_kv(self, servers):
         "Tests adding a bad value, followed by a valid kv pair"
         _, server, output = servers
-        server.sendall("this is junk data\n")
-        server.sendall("tubez:100|kv\n")
+        server.sendall(b"this is junk data\n")
+        server.sendall(b"tubez:100|kv\n")
         wait_file(output)
         now = time.time()
         out = open(output).read()
@@ -358,9 +362,9 @@ class TestIntegUDP(object):
     def test_counters(self, servers):
         "Tests adding kv pairs"
         _, server, output = servers
-        server.sendall("foobar:100|c\n")
-        server.sendall("foobar:200|c\n")
-        server.sendall("foobar:300|c\n")
+        server.sendall(b"foobar:100|c\n")
+        server.sendall(b"foobar:200|c\n")
+        server.sendall(b"foobar:300|c\n")
         wait_file(output)
         now = time.time()
         out = open(output).read()
@@ -370,9 +374,9 @@ class TestIntegUDP(object):
     def test_counters_signed(self, servers):
         "Tests adding kv pairs"
         _, server, output = servers
-        server.sendall("foobar:+100|c\n")
-        server.sendall("foobar:+200|c\n")
-        server.sendall("foobar:-50|c\n")
+        server.sendall(b"foobar:+100|c\n")
+        server.sendall(b"foobar:+200|c\n")
+        server.sendall(b"foobar:-50|c\n")
         wait_file(output)
         now = time.time()
         out = open(output).read()
@@ -382,9 +386,9 @@ class TestIntegUDP(object):
     def test_counters_sample(self, servers):
         "Tests adding kv pairs"
         _, server, output = servers
-        server.sendall("foobar:100|c|@0.1\n")
-        server.sendall("foobar:200|c|@0.1\n")
-        server.sendall("foobar:300|c|@0.1\n")
+        server.sendall(b"foobar:100|c|@0.1\n")
+        server.sendall(b"foobar:200|c|@0.1\n")
+        server.sendall(b"foobar:300|c|@0.1\n")
         wait_file(output)
         now = time.time()
         out = open(output).read()
@@ -394,8 +398,8 @@ class TestIntegUDP(object):
     def test_wrong_protocol_in_a_batch(self, servers):
         "Tests adding kv pairs"
         _, server, output = servers
-        server.sendall("foobar10c\nfoobar:10|c\nfoobar:10|c\n")
-        server.sendall("foobar:c\nfoobar:10|c\nfoobar:10|c\n")
+        server.sendall(b"foobar10c\nfoobar:10|c\nfoobar:10|c\n")
+        server.sendall(b"foobar:c\nfoobar:10|c\nfoobar:10|c\n")
         wait_file(output)
         now = time.time()
         out = open(output).read()
@@ -405,9 +409,9 @@ class TestIntegUDP(object):
     def test_counters_no_newlines(self, servers):
         "Tests adding counters without a trailing new line"
         _, server, output = servers
-        server.sendall("zip:100|c")
-        server.sendall("zip:200|c")
-        server.sendall("zip:300|c")
+        server.sendall(b"zip:100|c")
+        server.sendall(b"zip:200|c")
+        server.sendall(b"zip:300|c")
         wait_file(output)
         now = time.time()
         out = open(output).read()
@@ -417,9 +421,9 @@ class TestIntegUDP(object):
     def test_meters(self, servers):
         "Tests adding kv pairs"
         _, server, output = servers
-        msg = ""
-        for x in xrange(100):
-            msg += "noobs:%d|ms\n" % x
+        msg = b""
+        for x in range(100):
+            msg += b"noobs:%d|ms\n" % x
         server.sendall(msg)
         wait_file(output)
         out = open(output).read()
@@ -440,9 +444,9 @@ class TestIntegUDP(object):
     def test_sets(self, servers):
         "Tests adding kv pairs"
         _, server, output = servers
-        server.sendall("zip:foo|s\n")
-        server.sendall("zip:bar|s\n")
-        server.sendall("zip:baz|s\n")
+        server.sendall(b"zip:foo|s\n")
+        server.sendall(b"zip:bar|s\n")
+        server.sendall(b"zip:baz|s\n")
 
         wait_file(output)
         now = time.time()
@@ -461,11 +465,11 @@ class TestIntegBindAddress(object):
         port = %d
         udp_port = %s
         bind_address = %s\n'''
-        fh.write(textwrap.dedent(conf % (port, port, addr)))
+        fh.write(textwrap.dedent(conf % (port, port, addr)).encode("utf-8"))
         fh.flush()
 
         try:
-            p = subprocess.Popen(['./statsite', '-f', fh.name])
+            p = subprocess.Popen([STATSITE, '-f', fh.name])
             time.sleep(0.3)
             yield port
         finally:
@@ -475,7 +479,7 @@ class TestIntegBindAddress(object):
     def islistening(self, addr, port, command='statsite'):
         try:
             cmd = ['lsof', '-FnPc', '-nP', '-i', '@%s:%s' % (addr, port)]
-            out = subprocess.check_output(cmd)
+            out = subprocess.check_output(cmd).decode("utf-8")
         except subprocess.CalledProcessError:
             return False
 
