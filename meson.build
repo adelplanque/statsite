@@ -91,3 +91,4 @@ install_data(
 )
 
 subdir('tests')
+subdir('integ')
